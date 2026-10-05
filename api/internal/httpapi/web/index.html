@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Predictions</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header>
+    <h1>Predictions</h1>
+    <div id="session" hidden>
+      <span id="whoami"></span>
+      <button id="logout" type="button">Log out</button>
+    </div>
+  </header>
+
+  <main>
+    <section id="auth-panel">
+      <div class="forms">
+        <form id="login-form">
+          <h2>Log in</h2>
+          <label>Username or email
+            <input name="login" required autocomplete="username">
+          </label>
+          <label>Password
+            <input name="password" type="password" required autocomplete="current-password">
+          </label>
+          <button type="submit">Log in</button>
+        </form>
+
+        <form id="register-form">
+          <h2>Sign up</h2>
+          <label>Username
+            <input name="username" required pattern="[A-Za-z0-9_]{3,30}"
+                   title="3-30 letters, numbers or underscores" autocomplete="username">
+          </label>
+          <label>Email
+            <input name="email" type="email" required autocomplete="email">
+          </label>
+          <label>Password
+            <input name="password" type="password" required minlength="8" maxlength="72"
+                   autocomplete="new-password">
+          </label>
+          <button type="submit">Create account</button>
+        </form>
+      </div>
+      <p id="auth-message" role="status"></p>
+    </section>
+
+    <section>
+      <h2>Open events</h2>
+      <div id="events"></div>
+    </section>
+  </main>
+
+  <script src="/app.js"></script>
+</body>
+</html>
