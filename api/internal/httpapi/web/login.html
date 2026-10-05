@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Log in · Predictions</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header>
+    <h1><a href="/">Predictions</a></h1>
+    <nav id="nav"></nav>
+  </header>
+  <main>
+    <form id="login-form" class="auth-form">
+      <h2>Log in</h2>
+      <label>Username or email
+        <input name="login" required autocomplete="username">
+      </label>
+      <label>Password
+        <input name="password" type="password" required autocomplete="current-password">
+      </label>
+      <button type="submit">Log in</button>
+      <p id="message" class="error" role="status"></p>
+      <p class="alt">New here? <a href="/signup">Create an account</a></p>
+    </form>
+  </main>
+  <script src="/common.js"></script>
+  <script src="/login.js"></script>
+</body>
+</html>

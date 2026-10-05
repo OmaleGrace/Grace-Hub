@@ -28,6 +28,9 @@ func New(pool *pgxpool.Pool, secret []byte) http.Handler {
 	mux.HandleFunc("POST /login", s.login)
 	mux.HandleFunc("POST /events/{id}/predictions", s.requireAuth(s.submitPrediction))
 	mux.Handle("GET /", staticHandler())
+	mux.HandleFunc("GET /events/{id}/system-prediction", s.systemPrediction)
+	mux.HandleFunc("GET /login", pageHandler("login.html"))
+	mux.HandleFunc("GET /signup", pageHandler("signup.html"))
 	return mux
 }
 func writeJSON(w http.ResponseWriter, status int, v any) {
