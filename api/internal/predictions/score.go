@@ -12,6 +12,7 @@ import (
 
 var (
 	ErrAlreadyResolved = errors.New("event is already resolved")
+	ErrInvalidOutcome  = errors.New("outcome is not one of the event's options")
 	ErrNotResolvable   = errors.New("event cannot be resolved yet")
 )
 
@@ -31,10 +32,10 @@ func Resolve(ctx context.Context, pool *pgxpool.Pool, eventID int64, outcome str
 	err = tx.QueryRow(ctx, `
 		UPDATE events
 		SET status = 'resolved', outcome = $2, resolved_at = now()
-		WHERE id = $1 AND status <> 'resolved' AND locks_at <= now()
+		WHERE id = $1 AND status <> 'resolved' AND locks_at <= now() AND $2::text = ANY(options)
 		RETURNING id`, eventID, outcome).Scan(&id)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return 0, diagnoseResolve(ctx, pool, eventID)
+		return 0, diagnoseResolve(ctx, pool, eventID, outcome)
 	}
 	if err != nil {
 		return 0, fmt.Errorf("resolve event: %w", err)
@@ -49,7 +50,7 @@ func Resolve(ctx context.Context, pool *pgxpool.Pool, eventID int64, outcome str
 		return 0, fmt.Errorf("score predictions: %w", err)
 	}
 
-		_, err = tx.Exec(ctx, `
+	_, err = tx.Exec(ctx, `
 		UPDATE system_predictions
 		SET score = 1 - power(
 			confidence - (CASE WHEN lower(trim(predicted)) = $2 THEN 1 ELSE 0 END), 2)
@@ -63,13 +64,13 @@ func Resolve(ctx context.Context, pool *pgxpool.Pool, eventID int64, outcome str
 	}
 	return tag.RowsAffected(), nil
 }
-
-func diagnoseResolve(ctx context.Context, pool *pgxpool.Pool, eventID int64) error {
+func diagnoseResolve(ctx context.Context, pool *pgxpool.Pool, eventID int64, outcome string) error {
 	var status string
-	var lockPassed bool
+	var lockPassed, validOutcome bool
 	err := pool.QueryRow(ctx,
-		`SELECT status, locks_at <= now() FROM events WHERE id = $1`, eventID,
-	).Scan(&status, &lockPassed)
+		`SELECT status, locks_at <= now(), $2::text = ANY(options) FROM events WHERE id = $1`,
+		eventID, outcome,
+	).Scan(&status, &lockPassed, &validOutcome)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ErrEventNotFound
 	}
@@ -81,6 +82,9 @@ func diagnoseResolve(ctx context.Context, pool *pgxpool.Pool, eventID int64) err
 	}
 	if !lockPassed {
 		return ErrNotResolvable
+	}
+	if !validOutcome {
+		return ErrInvalidOutcome
 	}
 	return errors.New("event could not be resolved")
 }

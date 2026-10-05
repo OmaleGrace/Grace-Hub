@@ -16,35 +16,37 @@ var (
 	ErrEventNotOpen       = errors.New("event is not open for predictions")
 	ErrNoSystemPrediction = errors.New("system has not predicted this event yet")
 	ErrInvalidInput       = errors.New("invalid prediction input")
+	ErrInvalidOption      = errors.New("prediction is not one of the event's options")
 )
 
 type UserPrediction struct {
-	ID         int64
-	UserID     int64
-	EventID    int64
-	Predicted  string
-	Confidence float64
-	Score      *float64
-	CreatedAt  time.Time
-	UpdatedAt  time.Time
+	ID         int64     `json:"id"`
+	UserID     int64     `json:"user_id"`
+	EventID    int64     `json:"event_id"`
+	Predicted  string    `json:"predicted"`
+	Confidence float64   `json:"confidence"`
+	Score      *float64  `json:"score"`
+	CreatedAt  time.Time `json:"created_at"`
+	UpdatedAt  time.Time `json:"updated_at"`
 }
 
 func Submit(ctx context.Context, pool *pgxpool.Pool, userID, eventID int64,
 	predicted string, confidence float64) (*UserPrediction, error) {
 
-	predicted = strings.TrimSpace(predicted)
+	predicted = strings.ToLower(strings.TrimSpace(predicted))
 	if predicted == "" || confidence < 0 || confidence > 1 {
 		return nil, ErrInvalidInput
 	}
 
 	const query = `
 		INSERT INTO user_predictions (user_id, event_id, predicted, confidence)
-		SELECT $1, e.id, $3, $4
+		SELECT $1, e.id, $3::text, $4
 		FROM events e
 		WHERE e.id = $2
 		  AND e.status = 'open'
 		  AND e.opens_at <= now()
 		  AND e.locks_at > now()
+		  AND $3::text = ANY(e.options)
 		  AND EXISTS (SELECT 1 FROM system_predictions sp WHERE sp.event_id = e.id)
 		ON CONFLICT (user_id, event_id) DO UPDATE
 		  SET predicted = EXCLUDED.predicted,
@@ -62,17 +64,18 @@ func Submit(ctx context.Context, pool *pgxpool.Pool, userID, eventID int64,
 	if !errors.Is(err, pgx.ErrNoRows) {
 		return nil, fmt.Errorf("submit prediction: %w", err)
 	}
-	return nil, diagnose(ctx, pool, eventID)
+	return nil, diagnose(ctx, pool, eventID, predicted)
 }
 
-func diagnose(ctx context.Context, pool *pgxpool.Pool, eventID int64) error {
+func diagnose(ctx context.Context, pool *pgxpool.Pool, eventID int64, predicted string) error {
 	const query = `
 		SELECT (status = 'open' AND opens_at <= now() AND locks_at > now()),
+		       $2::text = ANY(options),
 		       EXISTS (SELECT 1 FROM system_predictions WHERE event_id = events.id)
 		FROM events WHERE id = $1`
 
-	var isOpen, hasSystem bool
-	err := pool.QueryRow(ctx, query, eventID).Scan(&isOpen, &hasSystem)
+	var isOpen, validOption, hasSystem bool
+	err := pool.QueryRow(ctx, query, eventID, predicted).Scan(&isOpen, &validOption, &hasSystem)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ErrEventNotFound
 	}
@@ -81,6 +84,9 @@ func diagnose(ctx context.Context, pool *pgxpool.Pool, eventID int64) error {
 	}
 	if !isOpen {
 		return ErrEventNotOpen
+	}
+	if !validOption {
+		return ErrInvalidOption
 	}
 	if !hasSystem {
 		return ErrNoSystemPrediction

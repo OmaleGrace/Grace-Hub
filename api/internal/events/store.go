@@ -14,14 +14,21 @@ func Create(ctx context.Context, pool *pgxpool.Pool, e *Event) error {
 	if e.Details == nil {
 		e.Details = []byte("{}")
 	}
+	if len(e.Options) == 0 {
+		if e.Category == "stocks" {
+			e.Options = []string{"above", "below"}
+		} else {
+			e.Options = []string{"home", "draw", "away"}
+		}
+	}
 
 	const query = `
-		INSERT INTO events (category, title, details, opens_at, locks_at, resolves_at)
-		VALUES ($1, $2, $3, $4, $5, $6)
+		INSERT INTO events (category, title, details, options, opens_at, locks_at, resolves_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
 		RETURNING id, status, created_at`
 
 	err := pool.QueryRow(ctx, query,
-		e.Category, e.Title, e.Details, e.OpensAt, e.LocksAt, e.ResolvesAt,
+		e.Category, e.Title, e.Details, e.Options, e.OpensAt, e.LocksAt, e.ResolvesAt,
 	).Scan(&e.ID, &e.Status, &e.CreatedAt)
 	if err != nil {
 		return fmt.Errorf("insert event: %w", err)
@@ -31,12 +38,12 @@ func Create(ctx context.Context, pool *pgxpool.Pool, e *Event) error {
 
 var ErrNotFound = errors.New("event not found")
 
-const selectColumns = `id, category, title, details, opens_at, locks_at,
+const selectColumns = `id, category, title, details, options, opens_at, locks_at,
 	resolves_at, status, outcome, resolved_at, created_at`
 
 func scanEvent(row pgx.Row) (*Event, error) {
 	var e Event
-	err := row.Scan(&e.ID, &e.Category, &e.Title, &e.Details, &e.OpensAt,
+		err := row.Scan(&e.ID, &e.Category, &e.Title, &e.Details, &e.Options, &e.OpensAt,
 		&e.LocksAt, &e.ResolvesAt, &e.Status, &e.Outcome, &e.ResolvedAt, &e.CreatedAt)
 	if err != nil {
 		return nil, err

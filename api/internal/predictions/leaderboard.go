@@ -8,11 +8,11 @@ import (
 )
 
 type LeaderboardEntry struct {
-	Rank        int
-	UserID      int64
-	Username    string
-	Predictions int64
-	AvgScore    float64
+	Rank        int     `json:"rank"`
+	UserID      int64   `json:"user_id"`
+	Username    string  `json:"username"`
+	Predictions int64   `json:"predictions"`
+	AvgScore    float64 `json:"avg_score"`
 }
 
 func Leaderboard(ctx context.Context, pool *pgxpool.Pool, category string,

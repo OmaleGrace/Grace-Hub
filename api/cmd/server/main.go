@@ -2,11 +2,15 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
 	"log"
+	"net/http"
 	"os"
+	"time"
 
 	"api/internal/database"
-	"api/internal/predictions"
+	"api/internal/events"
+	"api/internal/httpapi"
 )
 
 func main() {
@@ -23,17 +27,26 @@ func main() {
 	}
 	defer pool.Close()
 
-	c, err := predictions.ModelVsCommunity(ctx, pool, "")
-	if err != nil {
-		log.Fatal(err)
-	}
-	show := func(label string, v *float64) {
-		if v == nil {
-			log.Printf("%s: no scored predictions yet", label)
-			return
+	secret := []byte(os.Getenv("JWT_SECRET"))
+	if len(secret) == 0 {
+		secret = make([]byte, 32)
+		if _, err := rand.Read(secret); err != nil {
+			log.Fatal(err)
 		}
-		log.Printf("%s: average score %.4f", label, *v)
+		log.Print("JWT_SECRET not set: using a random secret; logins will not survive a restart")
 	}
-	show("system   ", c.SystemAvg)
-	show("community", c.UsersAvg)
+
+	go events.RunLocker(ctx, pool, 30*time.Second)
+
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+	srv := &http.Server{
+		Addr:              ":" + port,
+		Handler:           httpapi.New(pool, secret),
+		ReadHeaderTimeout: 5 * time.Second,
+	}
+	log.Printf("listening on :%s", port)
+	log.Fatal(srv.ListenAndServe())
 }
