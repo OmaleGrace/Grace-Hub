@@ -37,11 +37,11 @@ function renderEvent(e) {
   meta.className = "meta";
   meta.textContent = e.category + " · locks " + new Date(e.locks_at).toLocaleString();
 
-    const pick = document.createElement("p");
+    const pick = document.createElement("div");
   pick.className = "pick";
   pick.textContent = "System pick: loading...";
   card.append(title, meta, pick);
-  loadSystemPick(e.id, pick);
+  loadSystemPick(e.id, e.options, pick);
 
   if (isLoggedIn()) {
     card.appendChild(buildPredictionForm(e));
@@ -54,7 +54,7 @@ function renderEvent(e) {
   return card;
 }
 
-async function loadSystemPick(eventId, el) {
+async function loadSystemPick(eventId, options, el) {
   try {
     const res = await fetch("/events/" + eventId + "/system-prediction");
     if (res.status === 404) {
@@ -63,10 +63,49 @@ async function loadSystemPick(eventId, el) {
     }
     if (!res.ok) throw new Error("request failed");
     const p = await res.json();
-    el.textContent = "System pick: " + p.predicted + " (" + Math.round(p.confidence * 100) + "% confident)";
+
+    el.textContent = "";
+    const line = document.createElement("p");
+    line.className = "pick-line";
+    line.textContent =
+      "System pick: " + p.predicted + " (" + Math.round(p.confidence * 100) + "% confident)";
+    el.appendChild(line);
+
+    if (p.odds) {
+      el.appendChild(renderOdds(options, p));
+    }
   } catch (err) {
     el.textContent = "System pick unavailable right now.";
   }
+}
+
+function renderOdds(options, p) {
+  const row = document.createElement("div");
+  row.className = "odds";
+
+  for (const option of options) {
+    const price = p.odds[option];
+    if (price === undefined) continue;
+
+    const box = document.createElement("div");
+    box.className = option === p.predicted ? "odd picked" : "odd";
+
+    const name = document.createElement("span");
+    name.className = "name";
+    name.textContent = option;
+
+    const value = document.createElement("span");
+    value.className = "price";
+    value.textContent = price.toFixed(2);
+
+    const chance = document.createElement("span");
+    chance.className = "chance";
+    chance.textContent = Math.round(p.probabilities[option] * 100) + "% chance";
+
+    box.append(name, value, chance);
+    row.appendChild(box);
+  }
+  return row;
 }
 
 function buildPredictionForm(e) {

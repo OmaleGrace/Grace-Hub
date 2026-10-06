@@ -59,11 +59,16 @@ func Resolve(ctx context.Context, pool *pgxpool.Pool, eventID int64, outcome str
 		return 0, fmt.Errorf("score system predictions: %w", err)
 	}
 
+	if err := settleBets(ctx, tx, eventID, outcome); err != nil {
+		return 0, err
+	}
+
 	if err := tx.Commit(ctx); err != nil {
 		return 0, fmt.Errorf("commit: %w", err)
 	}
 	return tag.RowsAffected(), nil
 }
+
 func diagnoseResolve(ctx context.Context, pool *pgxpool.Pool, eventID int64, outcome string) error {
 	var status string
 	var lockPassed, validOutcome bool
@@ -87,4 +92,32 @@ func diagnoseResolve(ctx context.Context, pool *pgxpool.Pool, eventID int64, out
 		return ErrInvalidOutcome
 	}
 	return errors.New("event could not be resolved")
+}
+
+func settleBets(ctx context.Context, tx pgx.Tx, eventID int64, outcome string) error {
+	if _, err := tx.Exec(ctx, `
+		UPDATE bets
+		SET status = 'won', payout = floor(stake * odds)::bigint, settled_at = now()
+		WHERE event_id = $1 AND status = 'open' AND choice = $2`,
+		eventID, outcome); err != nil {
+		return fmt.Errorf("mark winning bets: %w", err)
+	}
+
+	if _, err := tx.Exec(ctx, `
+		UPDATE bets
+		SET status = 'lost', payout = 0, settled_at = now()
+		WHERE event_id = $1 AND status = 'open' AND choice <> $2`,
+		eventID, outcome); err != nil {
+		return fmt.Errorf("mark losing bets: %w", err)
+	}
+
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO wallet_entries (user_id, amount, reason, event_id, bet_id)
+		SELECT user_id, payout, 'payout', event_id, id
+		FROM bets
+		WHERE event_id = $1 AND status = 'won'`,
+		eventID); err != nil {
+		return fmt.Errorf("pay winners: %w", err)
+	}
+	return nil
 }

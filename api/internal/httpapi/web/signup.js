@@ -6,6 +6,14 @@ renderNav();
 const form = document.getElementById("signup-form");
 const message = document.getElementById("message");
 
+form.addEventListener(
+  "invalid",
+  (ev) => {
+    message.textContent = ev.target.validationMessage;
+  },
+  true
+);
+
 form.addEventListener("submit", async (ev) => {
   ev.preventDefault();
   const button = form.querySelector("button");
@@ -32,6 +40,8 @@ form.addEventListener("submit", async (ev) => {
       return;
     }
     window.location.assign("/");
+  } catch (err) {
+    message.textContent = "Could not reach the server. Please try again.";
   } finally {
     button.disabled = false;
   }

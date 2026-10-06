@@ -1,7 +1,7 @@
 import predict_events
 import ratings
 import storage
-
+ 
 
 def main():
     conn = storage.connect()

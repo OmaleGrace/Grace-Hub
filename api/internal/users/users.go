@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"golang.org/x/crypto/bcrypt"
+	"api/internal/wallet"
 )
 
 var (
@@ -45,8 +46,14 @@ func Register(ctx context.Context, pool *pgxpool.Pool, username, email, password
 		return nil, fmt.Errorf("hash password: %w", err)
 	}
 
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("begin transaction: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
 	var u User
-	err = pool.QueryRow(ctx, `
+	err = tx.QueryRow(ctx, `
 		INSERT INTO users (username, email, password_hash)
 		VALUES ($1, $2, $3)
 		RETURNING id, username, email, created_at`,
@@ -59,6 +66,13 @@ func Register(ctx context.Context, pool *pgxpool.Pool, username, email, password
 	}
 	if err != nil {
 		return nil, fmt.Errorf("insert user: %w", err)
+	}
+
+	if err := wallet.GrantSignupBonus(ctx, tx, u.ID); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("commit: %w", err)
 	}
 	return &u, nil
 }

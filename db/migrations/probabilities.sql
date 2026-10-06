@@ -1,0 +1,1 @@
+ALTER TABLE system_predictions ADD COLUMN probabilities JSONB;

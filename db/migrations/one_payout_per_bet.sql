@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX one_payout_per_bet ON wallet_entries(bet_id) WHERE reason = 'payout';
